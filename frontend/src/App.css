@@ -14,6 +14,20 @@
   font-size: 2.5rem;
 }
 
+.App-nav {
+  margin-top: 0.5rem;
+}
+
+.App-nav a {
+  color: #61dafb;
+  margin: 0 0.5rem;
+  text-decoration: none;
+}
+
+.App-nav a:hover {
+  text-decoration: underline;
+}
+
 .App-header p {
   margin: 0;
   font-size: 1.1rem;
