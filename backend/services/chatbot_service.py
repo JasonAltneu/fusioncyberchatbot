@@ -9,14 +9,14 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 from google import genai
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph # type: ignore
 from typing_extensions import TypedDict
 
 # Load environment variables
 load_dotenv()
 
 # Configure Gemini API
-GEMINI_API_KEY = 'AIzaSyBGV5d2LjMWdjKJF9dmlkns7jU96Zx-R2M'
+GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in environment variables")
 
