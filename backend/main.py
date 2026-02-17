@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from services.chatbot_service import chatbot_service
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(
     title="Fusion Cyber Chatbot API",
@@ -38,8 +42,12 @@ def health_check():
 
 @app.post("/chat")
 def chat(message: str):
-    """Chat endpoint - placeholder for chatbot logic"""
-    return {"reply": f"You said: {message}"}
+    """Chat endpoint - uses Gemini API via chatbot service"""
+    try:
+        response = chatbot_service.chat(message)
+        return {"reply": response}
+    except Exception as e:
+        return {"reply": f"Error: {str(e)}"}
 
 
 if __name__ == "__main__":
