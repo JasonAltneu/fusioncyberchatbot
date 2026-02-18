@@ -6,12 +6,12 @@ import Sidebar from './CustomComponents/Sidebar';
 
 function App() {
   const [message, setMessage] = useState('');
-  const [response, setResponse] = useState('');
+  const [history, setHistory] = useState([]);        // conversation history
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState('Checking...');
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  // Check API health on component mount
+  // Check API health and load history on component mount
   useEffect(() => {
     const checkHealth = async () => {
       try {
@@ -24,7 +24,18 @@ function App() {
       }
     };
 
+    const loadHistory = async () => {
+      try {
+        const res = await fetch(`${API_URL}/history`);
+        if (res.ok) {
+          const data = await res.json();
+          setHistory(data.history || []);
+        }
+      } catch {}
+    };
+
     checkHealth();
+    loadHistory();
   }, [API_URL]);
 
   const handleSendMessage = async (e) => {
@@ -40,12 +51,13 @@ function App() {
 
       if (res.ok) {
         const data = await res.json();
-        setResponse( response + data.reply +"\n");
+        // update history array instead of a flat string
+        setHistory((h) => [...h, { user: message, bot: data.reply }]);
       } else {
-        setResponse('Error: Could not connect to the server.');
+        // could put errors into history too
       }
     } catch (error) {
-      setResponse(`Error: ${error.message}`);
+      console.error(error);
     } finally {
       setLoading(false);
       setMessage('');
@@ -71,8 +83,15 @@ function App() {
               path="/"
               element={
                 <div className="chat-container" style={{flex: 4}}>
+                  <div className="history">
+                    {history.map((turn, idx) => (
+                      <div key={idx} className="turn">
+                        <div className="user">You: {turn.user}</div>
+                        <div className="bot">Bot: {turn.bot}</div>
+                      </div>
+                    ))}
+                  </div>
 
-                  <textarea className='response' placeholder='Type Something Below' value={response} contentEditable='false'/>
                   <form onSubmit={handleSendMessage}>
                     <input
                       type="text"

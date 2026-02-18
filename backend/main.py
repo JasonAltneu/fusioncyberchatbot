@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from services.chatbot_service import chatbot_service
+from typing import Optional
+from services.chatbot_service import chatbot_service, ChatbotService
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,23 +42,41 @@ def health_check():
 
 
 @app.post("/chat")
-def chat(message: str):
-    """Chat endpoint - uses Gemini API via chatbot service"""
+def chat(message: str, session_id: Optional[str] = None):
+    """Chat endpoint - uses Gemini API via chatbot service.
+
+    A session_id may be provided so that history is persisted for that
+    conversation; if omitted the global singleton is used.
+    """
     try:
-        response = chatbot_service.chat(message)
+        # if a session_id is provided, create a temporary service for it so
+        # the history can be fetched/stored independently of the singleton.
+        if session_id:
+            svc = ChatbotService(session_id=session_id)
+            response = svc.chat(message)
+        else:
+            response = chatbot_service.chat(message)
         return {"reply": response}
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
-    
 
 @app.post("/maps")
 def maps(message: str):
-    """Chat endpoint - uses Google Maps API via chatbot service"""
+    """Chat endpoint - uses Google API via chatbot service"""
     try:
         response = chatbot_service.chat(message)
         return {"reply": response}
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
+
+
+@app.get("/history")
+def get_history(session_id: Optional[str] = None):
+    """Return the conversation history for the given session (or global)."""
+    if session_id:
+        svc = ChatbotService(session_id=session_id)
+        return {"history": svc.get_conversation_history()}
+    return {"history": chatbot_service.get_conversation_history()}
 
 
 if __name__ == "__main__":

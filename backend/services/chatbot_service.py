@@ -25,7 +25,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # Simple SQLite helper used for storing conversation history if desired
 import sqlite3
 
-DB_PATH = os.environ.get('CHAT_DB_PATH', 'chat_history.db')
+DB_PATH = os.environ.get('CHAT_DB_PATH', '../chat_history.db')
 
 def get_db_connection():
     """Return a connection to the SQLite database, creating schema if needed."""
@@ -77,6 +77,7 @@ class ChatbotService:
         if session_id and conversationHistory is None:
             # fetch existing history from db
             self.conversation_history = self._load_history_from_db()
+            print(f"{self.conversation_history}")
         elif conversationHistory is not None:
             self.conversation_history = conversationHistory
         else:
