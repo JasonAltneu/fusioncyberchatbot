@@ -22,6 +22,35 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Simple SQLite helper used for storing conversation history if desired
+import sqlite3
+
+DB_PATH = os.environ.get('CHAT_DB_PATH', 'chat_history.db')
+
+def get_db_connection():
+    """Return a connection to the SQLite database, creating schema if needed."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _ensure_schema(conn)
+    return conn
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Create tables that don't already exist."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            user TEXT NOT NULL,
+            bot TEXT NOT NULL,
+            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
+
 
 class ChatState(TypedDict):
     """State for the chat workflow"""
@@ -33,14 +62,26 @@ class ChatState(TypedDict):
 class ChatbotService:
     """Service for handling chatbot operations with Gemini and LangGraph"""
 
-    def __init__(self, conversationHistory = None):
-        """Initialize the chatbot service"""
+    def __init__(self, conversationHistory: Optional[list] = None, session_id: Optional[str] = None):
+        """Initialize the chatbot service.
+
+        Args:
+            conversationHistory: optional pre‑loaded list of turns.
+            session_id: unique identifier for this chat session; if provided the
+                history will be read from and written to the SQLite database.
+        """
         self.client = client
         self.model = "gemini-3-flash-preview"
-        if(conversationHistory == None):
-            self.conversation_history = []
-        else:
+        self.session_id = session_id
+
+        if session_id and conversationHistory is None:
+            # fetch existing history from db
+            self.conversation_history = self._load_history_from_db()
+        elif conversationHistory is not None:
             self.conversation_history = conversationHistory
+        else:
+            self.conversation_history = []
+
         self.graph = self._build_workflow()
 
     def _build_workflow(self):
@@ -82,10 +123,10 @@ class ChatbotService:
             state["response"] = response.text
             
             # Update conversation history
-            self.conversation_history.append({
-                "user": state["message"],
-                "bot": response.text
-            })
+            turn = {"user": state["message"], "bot": response.text}
+            self.conversation_history.append(turn)
+            if self.session_id:
+                self._append_turn_to_db(turn)
         except Exception as e:
             state["response"] = f"Error: {str(e)}"
 
@@ -115,10 +156,35 @@ class ChatbotService:
     def reset_conversation(self) -> None:
         """Reset conversation history"""
         self.conversation_history = []
+        if self.session_id:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM history WHERE session_id=?", (self.session_id,))
+            conn.commit()
 
     def get_conversation_history(self) -> list:
         """Get the conversation history"""
         return self.conversation_history
+
+    # database helper methods
+    def _load_history_from_db(self) -> list:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user, bot FROM history WHERE session_id=? ORDER BY ts",
+            (self.session_id,)
+        )
+        rows = cur.fetchall()
+        return [{"user": r["user"], "bot": r["bot"]} for r in rows]
+
+    def _append_turn_to_db(self, turn: dict) -> None:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO history(session_id, user, bot) VALUES (?,?,?)",
+            (self.session_id, turn["user"], turn["bot"]),
+        )
+        conn.commit()
 
 
 # Initialize the service

@@ -4,7 +4,10 @@ function Account() {
   return (
     <div className="account-page" style={{flex: 4}}>
       <h2>Account</h2>
-      <p>This is the account page placeholder. Add user info or settings here.</p>
+      <form>
+        <label>Name: <input name='userName' placeholder='John Doe'/></label>
+        <label>Email: <input name='userEmail' placeholder='example@gmail.com'/></label>
+      </form>
     </div>
   );
 }
