@@ -33,11 +33,14 @@ class ChatState(TypedDict):
 class ChatbotService:
     """Service for handling chatbot operations with Gemini and LangGraph"""
 
-    def __init__(self):
+    def __init__(self, conversationHistory = None):
         """Initialize the chatbot service"""
         self.client = client
         self.model = "gemini-3-flash-preview"
-        self.conversation_history = []
+        if(conversationHistory == None):
+            self.conversation_history = []
+        else:
+            self.conversation_history = conversationHistory
         self.graph = self._build_workflow()
 
     def _build_workflow(self):

@@ -48,7 +48,6 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   padding: 2rem;
   width: 100%;
-  max-width: 500px;
 }
 
 .chat-container form {
@@ -97,14 +96,7 @@
   border-left: 4px solid #61dafb;
   padding: 1rem;
   border-radius: 4px;
-}
-
-.response strong {
-  color: #282c34;
-}
-
-.response p {
-  margin: 0.5rem 0 0 0;
-  color: #333;
-  line-height: 1.5;
+  resize: none;
+  width: 97%;
+  height: 40vh;
 }

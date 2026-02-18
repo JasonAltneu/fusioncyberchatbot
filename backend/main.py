@@ -48,6 +48,16 @@ def chat(message: str):
         return {"reply": response}
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
+    
+
+@app.post("/maps")
+def maps(message: str):
+    """Chat endpoint - uses Google Maps API via chatbot service"""
+    try:
+        response = chatbot_service.chat(message)
+        return {"reply": response}
+    except Exception as e:
+        return {"reply": f"Error: {str(e)}"}
 
 
 if __name__ == "__main__":

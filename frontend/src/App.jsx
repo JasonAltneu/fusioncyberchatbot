@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import Account from './Account';
+import Sidebar from './CustomComponents/Sidebar';
 
 function App() {
   const [message, setMessage] = useState('');
@@ -31,7 +32,6 @@ function App() {
     if (!message.trim()) return;
 
     setLoading(true);
-    setResponse('');
 
     try {
       const res = await fetch(`${API_URL}/chat?message=${encodeURIComponent(message)}`, {
@@ -40,7 +40,7 @@ function App() {
 
       if (res.ok) {
         const data = await res.json();
-        setResponse(data.reply);
+        setResponse( response + data.reply +"\n");
       } else {
         setResponse('Error: Could not connect to the server.');
       }
@@ -65,11 +65,14 @@ function App() {
         </header>
 
         <main className="App-main">
+          <Sidebar/>
           <Routes>
             <Route
               path="/"
               element={
-                <div className="chat-container">
+                <div className="chat-container" style={{flex: 4}}>
+
+                  <textarea className='response' placeholder='Type Something Below' value={response} contentEditable='false'/>
                   <form onSubmit={handleSendMessage}>
                     <input
                       type="text"
@@ -82,13 +85,6 @@ function App() {
                       {loading ? 'Sending...' : 'Send'}
                     </button>
                   </form>
-
-                  {response && (
-                    <div className="response">
-                      <strong>Response:</strong>
-                      <p>{response}</p>
-                    </div>
-                  )}
                 </div>
               }
             />
