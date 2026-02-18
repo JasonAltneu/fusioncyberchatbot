@@ -9,6 +9,8 @@ function App() {
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState('Checking...');
+  const [history, setHistory] = useState([])
+  const [text, setText] = useState("");
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   // Check API health on component mount
@@ -24,8 +26,22 @@ function App() {
       }
     };
 
+    const loadHistory = async () => {
+      try {
+        const res = await fetch(`${API_URL}/history`);
+        if (res.ok) {
+          const data = await res.json();
+          setHistory(data.history || []);
+        }
+      } catch {}
+    };
+
     checkHealth();
+    loadHistory();
   }, [API_URL]);
+
+
+  
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -40,6 +56,7 @@ function App() {
 
       if (res.ok) {
         const data = await res.json();
+        setText(text + "You: "+message+"\nBot: "+response+"\n")
         setResponse( response + data.reply +"\n");
       } else {
         setResponse('Error: Could not connect to the server.');
@@ -72,7 +89,7 @@ function App() {
               element={
                 <div className="chat-container" style={{flex: 4}}>
 
-                  <textarea className='response' placeholder='Type Something Below' value={response} contentEditable='false'/>
+                  <textarea className='response' placeholder='Type Something Below' value={text} contentEditable='false'/>
                   <form onSubmit={handleSendMessage}>
                     <input
                       type="text"
