@@ -9,6 +9,7 @@ function App() {
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState('Checking...');
+  const [activeChat, setActiveChat] = useState(0)
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   // Check API health on component mount
@@ -26,6 +27,10 @@ function App() {
 
     checkHealth();
   }, [API_URL]);
+
+  const handleSetActive = (val) =>{
+    setActiveChat(val)
+  }
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -65,13 +70,14 @@ function App() {
         </header>
 
         <main className="App-main">
-          <Sidebar/>
+          <Sidebar
+            setHandler = {handleSetActive}/>
           <Routes>
             <Route
               path="/"
               element={
                 <div className="chat-container" style={{flex: 4}}>
-
+                  <div>Active Chat: {activeChat}</div>
                   <textarea className='response' placeholder='Type Something Below' value={response} contentEditable='false'/>
                   <form onSubmit={handleSendMessage}>
                     <input
