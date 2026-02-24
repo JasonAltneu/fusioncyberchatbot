@@ -4,6 +4,8 @@ import './App.css';
 import Account from './Account';
 import Sidebar from './CustomComponents/Sidebar';
 
+
+
 function App() {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
@@ -30,6 +32,24 @@ function App() {
 
   const handleSetActive = (val) =>{
     setActiveChat(val)
+  }
+
+  const handleSetMessages = (val) => {
+    const normalized = val.map(item => ({
+      uid: item.id,
+      time: new Date(item.last_updated),
+      text: item.message,
+      from: item.sender
+    }));
+    normalized.sort((a,b) => {
+      return new Date(a.time) - new Date(b.time);
+    })
+    const chatString = normalized
+      .map(msg => `${msg.from}: ${msg.text}`)
+      .join("\n");
+
+    // show the string to the user
+    setResponse(chatString);
   }
 
   const handleSendMessage = async (e) => {
@@ -71,7 +91,8 @@ function App() {
 
         <main className="App-main">
           <Sidebar
-            setHandler = {handleSetActive}/>
+            setHandler = {handleSetActive}
+            setHistory={handleSetMessages}/>
           <Routes>
             <Route
               path="/"

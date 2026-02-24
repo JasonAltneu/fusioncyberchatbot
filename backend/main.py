@@ -12,6 +12,7 @@ class Conversation:
     initial_prompt: str
     last_updated: str
 
+@dataclass
 class Chat:
     id: int
     sender: str
@@ -104,7 +105,7 @@ def getHistory():
             conn.close()
     
 @app.post("/chathistory")
-def getChatHistory(id: int):
+def chathistory(id: str):
     try:
         # Connect to database
         conn = sqlite3.connect('./chat_history.db')
@@ -116,8 +117,8 @@ def getChatHistory(id: int):
         query = """
             SELECT id, sender, message, last_updated
             FROM chat
-            WHERE id = {id}
-            ORDER BY last_updated ASC
+            WHERE id = """+id+"""
+            ORDER BY last_updated ASC;
         """
 
         cursor.execute(query)
@@ -132,7 +133,7 @@ def getChatHistory(id: int):
         # FastAPI will happily convert a dataclass to JSON, so either of the
         # following responses is acceptable:
         # return {"names": results_dicts}
-        return {"names": [r.__dict__ for r in results_objs]}
+        return {"chats": [r.__dict__ for r in results_objs]}
 
     except sqlite3.Error as e:
         print(f"Database error: {e}")

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../App.css';
 
-function Sidebar( {setHandler}) {
+function Sidebar( {setHandler, setHistory}) {
   const [conversations, setConversations] = useState([]);
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -22,11 +22,31 @@ function Sidebar( {setHandler}) {
     loadConversations();
   }, [API_URL]);
 
+
+  const loadChatHistory = async(id) => {
+    try {
+        // history endpoint is POST with no payload
+        const res = await fetch(`${API_URL}/chathistory?id=${encodeURIComponent(id)}`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          console.log(data.chats);
+          setHistory(data.chats || []);
+        }
+      } catch (err) {
+        console.error('failed to fetch conversations', err);
+      }
+  }
+
   return (
     <div className = "sidebar" style={{ flex: 1, textAlign: 'left' }}>
       <h2>Conversations</h2>
         {conversations.map((c) => (
-          <div key={c.id} onClick={() => setHandler(c.id)}>
+          <div key={c.id} onClick={() => { 
+          setHandler(c.id);
+          loadChatHistory(c.id);}
+          }>
             {c.initial_prompt}
           </div>
         ))}
