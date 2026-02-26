@@ -4,14 +4,14 @@ import './App.css';
 import Account from './Account';
 import Sidebar from './CustomComponents/Sidebar';
 
-
-
 function App() {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState('Checking...');
-  const [activeChat, setActiveChat] = useState(0)
+  const [activeChat, setActiveChat] = useState(0);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   // Check API health on component mount
@@ -30,9 +30,29 @@ function App() {
     checkHealth();
   }, [API_URL]);
 
+  // Fetch stored user parameters once on mount
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        const res = await fetch(`${API_URL}/userinfo`);
+        if (res.ok) {
+          const data = await res.json();
+          setName(data.UserName || '');
+          setEmail(data.UserEmail || '');
+        }
+      } catch (err) {
+        console.error('Failed to load user info', err);
+      }
+    };
+
+    loadUserInfo();
+  }, [API_URL]);
+
   const handleSetActive = (val) =>{
     setActiveChat(val)
   }
+
+
 
   const handleSetMessages = (val) => {
     const normalized = val.map(item => ({
@@ -109,7 +129,6 @@ function App() {
               path="/"
               element={
                 <div className="chat-container" style={{flex: 4}}>
-                  <div>Active Chat: {activeChat}</div>
                   <textarea className='response' placeholder='Type Something Below' value={response} contentEditable='false'/>
                   <form onSubmit={handleSendMessage}>
                     <input
@@ -127,7 +146,10 @@ function App() {
               }
             />
 
-            <Route path="/account" element={<Account />} />
+            <Route
+              path="/account"
+              element={<Account user_parameters={{ UserName: name, UserEmail: email }} />}
+            />
           </Routes>
         </main>
       </div>

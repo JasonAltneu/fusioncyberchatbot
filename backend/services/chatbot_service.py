@@ -28,6 +28,8 @@ class ChatState(TypedDict):
     message: str
     conversation_history: list
     response: str
+    user_name: Optional[str]
+    user_email: Optional[str]
 
 
 class ChatbotService:
@@ -74,6 +76,15 @@ class ChatbotService:
         Generate response using Gemini API.
         """
         try:
+            # Build system context with user's name if provided
+            prompt_lines = []
+            user_name = state.get("user_name")
+            user_email = state.get("user_email")
+            if user_name:
+                prompt_lines.append(f"System: You are speaking with {user_name}.")
+            if user_email:
+                prompt_lines.append(f"System: The user's email address is {user_email}.")
+
             # Build conversation context from history as a single text prompt.
             # The Gemini `generate_content` endpoint expects string content
             # (or a list of strings), not dicts with role/content, so we
@@ -82,7 +93,6 @@ class ChatbotService:
             # Ensure current message is treated like the latest user entry
             all_msgs = list(messages) + [{"role": "user", "content": state["message"]}]
 
-            prompt_lines = []
             for m in all_msgs:
                 role = (m.get("role") or "user").lower()
                 label = "User" if role.startswith("user") else "Bot"
@@ -106,13 +116,14 @@ class ChatbotService:
 
         return state
 
-    def chat(self, message: str, history: list = None) -> str:
+    def chat(self, message: str, history: list = None, user_name: str = None, user_email: str = None) -> str:
         """
         Main chat method. Processes message through the workflow.
         
         Args:
             message: User's input message
             history: Optional list of previous messages to provide context
+            user_name: Optional user's name to include in system context
             
         Returns:
             str: Bot's response
@@ -125,7 +136,8 @@ class ChatbotService:
         state = ChatState(
             message=message,
             conversation_history=self.conversation_history,
-            response=""
+            response="",
+            user_name=user_name
         )
 
         # Run through workflow

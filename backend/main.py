@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.chatbot_service import chatbot_service
+from services.maps_service import places_text_search
 from dotenv import load_dotenv
 import sqlite3
 import json
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 # simple typed container for the conversation table
@@ -59,6 +62,50 @@ def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
+@app.post("/updateinfo")
+def update_user_info(name, email):
+    try:
+        conn = sqlite3.connect('./chat_history.db')
+        cursor = conn.cursor()
+        cursor.execute(
+        "UPDATE user_parameters SET (UserName, UserEmail) = ((?), (?))"
+        "WHERE Id = 1",
+            (name, email)
+        )
+        conn.commit()
+    except sqlite3.Error as db_err:
+        print(f"Database creation error: {db_err}")
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/userinfo")
+def get_user_info():
+    """Return stored user parameters (name and email) as JSON."""
+    try:
+        conn = sqlite3.connect('./chat_history.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT UserName, UserEmail "
+            "FROM user_parameters "
+            "WHERE Id = 1"
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "UserName": row["UserName"],
+                "UserEmail": row["UserEmail"]
+            }
+        else:
+            # record not found, return empty strings
+            return {"UserName": "", "UserEmail": ""}
+    except sqlite3.Error as e:
+        print(f"Database error fetching user info: {e}")
+        return {"UserName": "", "UserEmail": ""}
+    finally:
+        if conn:
+            conn.close()
 
 def get_chat_history(chat_id: int):
     """Fetch previous messages for a conversation from the database"""
@@ -91,6 +138,45 @@ def get_chat_history(chat_id: int):
         if conn:
             conn.close()
 
+def get_user_name() -> str:
+    """Fetch the user's name from the database"""
+    try:
+        conn = sqlite3.connect('./chat_history.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT UserName FROM user_parameters WHERE Id = 1"
+        )
+        row = cursor.fetchone()
+        if row and row["UserName"]:
+            return row["UserName"]
+        return None
+    except sqlite3.Error as e:
+        print(f"Database error fetching user name: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_user_email() -> str:
+    """Fetch the user's email from the database"""
+    try:
+        conn = sqlite3.connect('./chat_history.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT UserEmail FROM user_parameters WHERE Id = 1"
+        )
+        row = cursor.fetchone()
+        if row and row["UserEmail"]:
+            return row["UserEmail"]
+        return None
+    except sqlite3.Error as e:
+        print(f"Database error fetching user email: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 @app.post("/chat")
 def chat(message: str, chat_id: int = 0):
@@ -106,19 +192,30 @@ def chat(message: str, chat_id: int = 0):
     `chat` table as before.
     """
     try:
-        # recognize special prefixes for debugging
+        # recognize special prefixes for debugging and special handling
         lower_msg = message.lower().strip()
+        # ensure created_id is defined for later DB writes
+        created_id = chat_id
+
         if lower_msg.startswith("map: "):
-            print("Received map request")       # Use Google Maps API to find nearby subject
-            print(f"{message[5:]}")
+            query = message[len("map: "):].strip()
+            print("Received map request")
+            try:
+                response = places_text_search(query)
+            except Exception as e:
+                response = f"Map API error: {e}"
+
         elif lower_msg.startswith("email: "):
             print("Received email request")     # Use MockMail with logging to the console.
             print(f"{message[7:]}")
             response = "I printed the email to the console"
+
         else:
             # Fetch chat history if this is a continuing conversation
             history = get_chat_history(chat_id) if chat_id > 0 else []
-            response = chatbot_service.chat(message, history=history)
+            user_name = get_user_name()
+            user_email = get_user_email()
+            response = chatbot_service.chat(message, history=history, user_name=user_name, user_email=user_email)
             created_id = chat_id
             msg_header = message[0:20]
 
@@ -169,6 +266,60 @@ def chat(message: str, chat_id: int = 0):
         return result
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
+
+
+# --- Scheduling support (APScheduler) ------------------------------------
+def scheduled_job(chat_id: int, message: str):
+    """Worker function executed by the scheduler."""
+    try:
+        history = get_chat_history(chat_id) if chat_id and chat_id > 0 else []
+        user_name = get_user_name()
+        user_email = get_user_email()
+        response = chatbot_service.chat(message, history=history, user_name=user_name, user_email=user_email)
+
+        # persist results using same normalized JSON format
+        conn = sqlite3.connect('./chat_history.db')
+        cursor = conn.cursor()
+        user_msg = json.dumps({"role": "user", "content": message})
+        bot_msg = json.dumps({"role": "bot", "content": response})
+        cursor.execute(
+            "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
+            (chat_id, 'user', user_msg)
+        )
+        cursor.execute(
+            "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
+            (chat_id, 'bot', bot_msg)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"Scheduled job error: {e}")
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
+# create and start scheduler
+scheduler = BackgroundScheduler()
+scheduler.start()
+
+
+@app.post('/schedule')
+def schedule_job(chat_id: int, message: str, run_after_seconds: int = 0):
+    """Schedule a one-off job to run after `run_after_seconds` seconds."""
+    run_time = datetime.utcnow() + timedelta(seconds=run_after_seconds)
+    job = scheduler.add_job(scheduled_job, 'date', run_date=run_time, args=[chat_id, message])
+    return {"job_id": job.id, "run_at": run_time.isoformat()}
+
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        pass
 
 @app.post("/history")
 def getHistory():
