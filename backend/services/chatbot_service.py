@@ -74,33 +74,53 @@ class ChatbotService:
         Generate response using Gemini API.
         """
         try:
-            # Get response from Gemini
+            # Build conversation context from history as a single text prompt.
+            # The Gemini `generate_content` endpoint expects string content
+            # (or a list of strings), not dicts with role/content, so we
+            # concatenate the prior exchanges into a readable prompt.
+            messages = state.get("conversation_history") or []
+            # Ensure current message is treated like the latest user entry
+            all_msgs = list(messages) + [{"role": "user", "content": state["message"]}]
+
+            prompt_lines = []
+            for m in all_msgs:
+                role = (m.get("role") or "user").lower()
+                label = "User" if role.startswith("user") else "Bot"
+                content = m.get("content") or m.get("message") or ""
+                prompt_lines.append(f"{label}: {content}")
+
+            prompt = "\n".join(prompt_lines)
+
+            # Get response from Gemini using a single string prompt
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=state["message"]
+                contents=prompt
             )
             state["response"] = response.text
-            
-            # Update conversation history
-            self.conversation_history.append({
-                "user": state["message"],
-                "bot": response.text
-            })
+
+            # Update conversation history in a normalized format
+            self.conversation_history.append({"role": "user", "content": state["message"]})
+            self.conversation_history.append({"role": "bot", "content": response.text})
         except Exception as e:
             state["response"] = f"Error: {str(e)}"
 
         return state
 
-    def chat(self, message: str) -> str:
+    def chat(self, message: str, history: list = None) -> str:
         """
         Main chat method. Processes message through the workflow.
         
         Args:
             message: User's input message
+            history: Optional list of previous messages to provide context
             
         Returns:
             str: Bot's response
         """
+        # Use provided history if available, otherwise use internal history
+        if history:
+            self.conversation_history = history
+        
         # Create initial state
         state = ChatState(
             message=message,

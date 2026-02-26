@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.chatbot_service import chatbot_service
 from dotenv import load_dotenv
 import sqlite3
+import json
 from dataclasses import dataclass
 
 # simple typed container for the conversation table
@@ -18,6 +19,8 @@ class Chat:
     sender: str
     message: str
     last_updated: str
+
+
 
 
 load_dotenv()
@@ -57,6 +60,38 @@ def health_check():
     return {"status": "healthy"}
 
 
+def get_chat_history(chat_id: int):
+    """Fetch previous messages for a conversation from the database"""
+    try:
+        conn = sqlite3.connect('./chat_history.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT sender, message FROM chat WHERE id = ? ORDER BY last_updated ASC",
+            (chat_id,)
+        )
+        rows = cursor.fetchall()
+        results = []
+        for row in rows:
+            raw_msg = row["message"]
+            # try to decode JSON stored messages (normalized format)
+            try:
+                parsed = json.loads(raw_msg)
+                role = parsed.get("role") or row["sender"]
+                content = parsed.get("content") if parsed.get("content") is not None else raw_msg
+            except Exception:
+                role = row["sender"]
+                content = raw_msg
+            results.append({"role": role, "content": content})
+        return results
+    except sqlite3.Error as e:
+        print(f"Database error fetching history: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.post("/chat")
 def chat(message: str, chat_id: int = 0):
     """Chat endpoint - uses Gemini API via chatbot service
@@ -81,8 +116,11 @@ def chat(message: str, chat_id: int = 0):
             print(f"{message[7:]}")
             response = "I printed the email to the console"
         else:
-            response = chatbot_service.chat(message)
+            # Fetch chat history if this is a continuing conversation
+            history = get_chat_history(chat_id) if chat_id > 0 else []
+            response = chatbot_service.chat(message, history=history)
             created_id = chat_id
+            msg_header = message[0:20]
 
             # if this is a new conversation, insert into conversations table
             if not chat_id or chat_id <= 0:
@@ -91,7 +129,7 @@ def chat(message: str, chat_id: int = 0):
                     cursor = conn.cursor()
                     cursor.execute(
                         "INSERT INTO conversations(initial_prompt) VALUES (?)",
-                        (message,)
+                        (msg_header,)
                     )
                     created_id = cursor.lastrowid
                     conn.commit()
@@ -106,13 +144,16 @@ def chat(message: str, chat_id: int = 0):
             try:
                 conn = sqlite3.connect('./chat_history.db')
                 cursor = conn.cursor()
+                # store messages in a normalized JSON format for future parsing
+                user_msg = json.dumps({"role": "user", "content": message})
+                bot_msg = json.dumps({"role": "bot", "content": response})
                 cursor.execute(
                     "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
-                    (created_id, 'user', message)
+                    (created_id, 'user', user_msg)
                 )
                 cursor.execute(
                     "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
-                    (created_id, 'bot', response)
+                    (created_id, 'bot', bot_msg)
                 )
                 conn.commit()
             except sqlite3.Error as db_err:
@@ -187,15 +228,27 @@ def chathistory(id: str):
         cursor.execute(query)
         rows = cursor.fetchall()
 
-        # rows are sqlite3.Row; you can turn them into simple dicts:
-        results_dicts = [dict(row) for row in rows]
+        # normalize stored messages (they may be JSON or plain strings)
+        processed = []
+        for row in rows:
+            item = dict(row)
+            raw_msg = item.get("message")
+            try:
+                parsed = json.loads(raw_msg)
+                sender = parsed.get("role") or item.get("sender")
+                message = parsed.get("content") if parsed.get("content") is not None else raw_msg
+            except Exception:
+                sender = item.get("sender")
+                message = raw_msg
 
-        # or, if you prefer a typed object with attributes, use our dataclass
-        results_objs = [Chat(**dict(row)) for row in rows]
+            processed.append({
+                "id": item.get("id"),
+                "sender": sender,
+                "message": message,
+                "last_updated": item.get("last_updated")
+            })
 
-        # FastAPI will happily convert a dataclass to JSON, so either of the
-        # following responses is acceptable:
-        # return {"names": results_dicts}
+        results_objs = [Chat(**p) for p in processed]
         return {"chats": [r.__dict__ for r in results_objs]}
 
     except sqlite3.Error as e:
