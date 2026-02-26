@@ -59,13 +59,24 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/chat?message=${encodeURIComponent(message)}`, {
+      // build URL with optional chat_id parameter
+      const url = new URL(`${API_URL}/chat`);
+      url.searchParams.set('message', message);
+      if (activeChat && activeChat !== 0) {
+        url.searchParams.set('chat_id', activeChat);
+      }
+
+      const res = await fetch(url.toString(), {
         method: 'POST',
       });
 
       if (res.ok) {
         const data = await res.json();
-        setResponse( response + data.reply +"\n");
+        setResponse( response + "\nyou: "+ message + "\nbot: " +data.reply +"\n");
+        // if server created a new chat, update activeChat
+        if (data.chat_id && activeChat === 0) {
+          setActiveChat(data.chat_id);
+        }
       } else {
         setResponse('Error: Could not connect to the server.');
       }

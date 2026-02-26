@@ -58,11 +58,74 @@ def health_check():
 
 
 @app.post("/chat")
-def chat(message: str):
-    """Chat endpoint - uses Gemini API via chatbot service"""
+def chat(message: str, chat_id: int = 0):
+    """Chat endpoint - uses Gemini API via chatbot service
+
+    The endpoint now supports creating a new conversation when
+    `chat_id` is zero.  In that case the initial user message is
+    stored in `conversations` and the returned JSON includes the
+    new identifier so the frontend can update `activeChat`.
+
+    If a non‑zero `chat_id` is provided, or after a new conversation
+    is created, both the user input and bot response are saved in the
+    `chat` table as before.
+    """
     try:
-        response = chatbot_service.chat(message)
-        return {"reply": response}
+        # recognize special prefixes for debugging
+        lower_msg = message.lower().strip()
+        if lower_msg.startswith("map: "):
+            print("Received map request")       # Use Google Maps API to find nearby subject
+            print(f"{message[5:]}")
+        elif lower_msg.startswith("email: "):
+            print("Received email request")     # Use MockMail with logging to the console.
+            print(f"{message[7:]}")
+            response = "I printed the email to the console"
+        else:
+            response = chatbot_service.chat(message)
+            created_id = chat_id
+
+            # if this is a new conversation, insert into conversations table
+            if not chat_id or chat_id <= 0:
+                try:
+                    conn = sqlite3.connect('./chat_history.db')
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO conversations(initial_prompt) VALUES (?)",
+                        (message,)
+                    )
+                    created_id = cursor.lastrowid
+                    conn.commit()
+                except sqlite3.Error as db_err:
+                    print(f"Database creation error: {db_err}")
+                finally:
+                    if conn:
+                        conn.close()
+
+            # now record the chat entries if we have a valid id
+        if created_id and created_id > 0:
+            try:
+                conn = sqlite3.connect('./chat_history.db')
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
+                    (created_id, 'user', message)
+                )
+                cursor.execute(
+                    "INSERT INTO chat(id, sender, message) VALUES (?, ?, ?)",
+                    (created_id, 'bot', response)
+                )
+                conn.commit()
+            except sqlite3.Error as db_err:
+                print(f"Database write error: {db_err}")
+            finally:
+                if conn:
+                    conn.close()
+
+        # return chat_id so frontend can update if new
+        result = {"reply": response}
+        if created_id and created_id > 0:
+            result["chat_id"] = created_id
+        return result
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
 
