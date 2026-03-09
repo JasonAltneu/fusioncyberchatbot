@@ -83,7 +83,7 @@ class ChatbotService:
             if user_name:
                 prompt_lines.append(f"System: You are speaking with {user_name}.")
             if user_email:
-                prompt_lines.append(f"System: The user's email address is {user_email}.")
+                prompt_lines.append(f"System: The user's hobby is {user_email}.")
 
             # Build conversation context from history as a single text prompt.
             # The Gemini `generate_content` endpoint expects string content

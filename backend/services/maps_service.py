@@ -6,26 +6,37 @@ load_dotenv()
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
+class MapService:
 
-def places_text_search(query: str, limit: int = 5) -> str:
-    """Perform a Google Maps Places Text Search and return a simple text summary."""
-    if not GOOGLE_MAPS_API_KEY:
-        raise ValueError("GOOGLE_MAPS_API_KEY not set in environment")
+    def google_maps_search(self, query: str):
+        """
+        Run a Google Maps Places Text Search using a natural language query.
+        Example query: 'coffee near University Park MD'
+        """
+        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+        print(f"API Query: {query}")
+        params = {
+            "query": query,
+            "key": GOOGLE_MAPS_API_KEY
+        }
 
-    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": query, "key": GOOGLE_MAPS_API_KEY}
-    resp = requests.get(url, params=params, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
 
-    results = data.get("results", [])[:limit]
-    if not results:
-        return "No places found."
+        results = []
 
-    lines = []
-    for i, r in enumerate(results, start=1):
-        name = r.get("name")
-        addr = r.get("formatted_address")
-        lines.append(f"{i}. {name} — {addr}")
+        for place in data.get("results", [])[:5]:
+            name = place.get("name", "Unknown")
+            address = place.get("formatted_address", "Unknown address")
+            rating = place.get("rating", "N/A")
+            location = place.get("geometry", {}).get("location", {})
 
-    return "\n".join(lines)
+            lat = location.get("lat", "N/A")
+            lng = location.get("lng", "N/A")
+
+            results.append(f"{name} — {address} — Rating: {rating} — ({lat}, {lng})")
+
+        return "\n".join(results)
+
+map_service = MapService()

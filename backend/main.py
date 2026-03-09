@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.chatbot_service import chatbot_service
-from services.maps_service import places_text_search
+from services.maps_service import map_service
 from dotenv import load_dotenv
 import sqlite3
 import json
@@ -62,19 +62,24 @@ def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
+from fastapi import Body
+
 @app.post("/updateinfo")
-def update_user_info(name, email):
+def update_user_info(name: str = Body(...), email: str = Body(...)):
+    """Receive JSON body with name and email and update the database."""
     try:
         conn = sqlite3.connect('./chat_history.db')
         cursor = conn.cursor()
         cursor.execute(
-        "UPDATE user_parameters SET (UserName, UserEmail) = ((?), (?))"
-        "WHERE Id = 1",
+            "UPDATE user_parameters SET (UserName, UserEmail) = ((?), (?)) "
+            "WHERE Id = 1",
             (name, email)
         )
         conn.commit()
+        return {"status": "ok"}
     except sqlite3.Error as db_err:
         print(f"Database creation error: {db_err}")
+        return {"status": "error"}
     finally:
         if conn:
             conn.close()
@@ -199,9 +204,11 @@ def chat(message: str, chat_id: int = 0):
 
         if lower_msg.startswith("map: "):
             query = message[len("map: "):].strip()
+            print(f"query: {query}")
             print("Received map request")
             try:
-                response = places_text_search(query)
+                response = map_service.google_maps_search(query)
+                print(f"{response}")
             except Exception as e:
                 response = f"Map API error: {e}"
 
@@ -409,15 +416,6 @@ def chathistory(id: str):
     finally:
         if conn:
             conn.close()
-
-@app.post("/maps")
-def maps(message: str):
-    """Chat endpoint - uses Google Maps API via chatbot service"""
-    try:
-        response = chatbot_service.chat(message)
-        return {"reply": response}
-    except Exception as e:
-        return {"reply": f"Error: {str(e)}"}
 
 
 if __name__ == "__main__":

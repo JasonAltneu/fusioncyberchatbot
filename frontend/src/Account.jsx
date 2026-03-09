@@ -8,14 +8,18 @@ function Account({ user_parameters = {} }) {
 
   const updateUserInfo = async () => {
       try {
-        const url = new URL(`${API_URL}/updateinfo`);
-        url.searchParams.set('name', name);
-        url.searchParams.set('email', email);
-        await fetch(url.toString(), {
+        const res = await fetch(`${API_URL}/updateinfo`, {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email })
         });
+        if (!res.ok) {
+          throw new Error(`status ${res.status}`);
+        }
+        // optionally you could provide feedback or refresh the page
+        console.log('User info updated');
       } catch (err) {
-        console.error('Failed to load user info', err);
+        console.error('Failed to update user info', err);
       }
   }
 
